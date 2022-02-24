@@ -1,0 +1,5 @@
+Jinja2==3.0.3
+sse-starlette==0.10.3
+sse-starlette==0.10.3
+starlette==0.18.0
+uvicorn==0.17.5
