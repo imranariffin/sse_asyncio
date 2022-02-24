@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+    <title>SSE Demo</title>
+    <body>
+        SSE Demo
+    </body>
+    <script>
+        var eventSource = new EventSource(
+            "http://localhost:8000/sse/",
+            {
+                withCredentials: true,
+                
+            },
+        );
+        eventSource.onopen = function () {
+            console.log("SSE streaming connection is open");
+        };
+        eventSource.onmessage = function (event) {
+            console.log(event);
+        };
+        eventSource.addEventListener("some-event", function(event) {
+            console.log(event);
+        });
+        eventSource.onerror = function () {
+            console.log("Some error happened");
+        };
+    </script>
+</html>
