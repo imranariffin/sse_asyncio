@@ -1,0 +1,13 @@
+version: "3"
+
+services:
+    database:
+        image: "postgres"
+        environment:
+            - POSTGRES_PASSWORD=postgrespassword
+            - POSTGRES_USER=postgres
+            - POSTGRES_DB=postgres
+        ports:
+            - 5432:5432
+        volumes:
+            - /var/run/postgresql:/var/run/postgresql
