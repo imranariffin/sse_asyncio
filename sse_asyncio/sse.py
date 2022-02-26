@@ -16,17 +16,12 @@ async def sse_generator(request: "Request"):
             break
 
         data: dict = {
-            "id": f"some-data-{i}",
+            "id": "456.name",
+            "value": "User 999",
         }
-        event = (
-            "event: some-event\n"
-            f"data: {json.dumps(data)}\n"
-            f"id: some-event-{i}\n"
-            "\n"
-        )
         event = Event(event="some-event", data=data, id=f"some-event-{i}")
         print(f"Sending event: {event!r}")
-        yield event
+        yield event.to_json()
         i += 1
         await asyncio.sleep(1)
 
@@ -45,3 +40,12 @@ class Event:
         data_line = f"data: {json.dumps(self.data)}"
         id_line = f"id: {self.id}" if self.id else ""
         return "\n".join([event_line, data_line, id_line]) + "\n"
+
+    def to_json(self) -> dict:
+        event_json = {
+            "event": self.event,
+            "data": json.dumps(self.data),
+        }
+        if self.id:
+            event_json["id"] = self.id
+        return event_json

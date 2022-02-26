@@ -3,26 +3,66 @@
     <title>SSE Demo</title>
     <body>
         SSE Demo
+        <table>
+            <thead>
+                <td>Column 1</td>
+                <td>Column 2</td>
+            </thead>
+            <tbody id="user-table-body">
+                <tr>
+                    <td>Value 1</td>
+                    <td>Value 2</td>
+                </tr>
+            </tbody>
+        </table>
     </body>
     <script>
         var eventSource = new EventSource(
-            "http://localhost:8000/sse/",
+            "/sse/",
             {
-                withCredentials: true,
-                
+                withCredentials: true,     
             },
         );
         eventSource.onopen = function () {
             console.log("SSE streaming connection is open");
         };
-        eventSource.onmessage = function (event) {
-            console.log(event);
-        };
         eventSource.addEventListener("some-event", function(event) {
-            console.log(event);
+            const data = JSON.parse(event.data);
+            console.log(data);
+            const cellEl = document.getElementById(data.id);
+            if (cellEl) {
+                cellEl.innerText = data.value;
+                cellEl.style = "background-color: red;"
+                setTimeout(() => {
+                    cellEl.style = "";
+                }, 500)
+            }
         });
         eventSource.onerror = function () {
             console.log("Some error happened");
         };
+
+        fetch("/users/chart/").then(r => r.json()).then(r => {
+            console.log(r);
+            const rows = [
+                {"id": 123, "name": "User 1"},
+                {"id": 456, "name": "User 2"},
+            ];
+            var userTable = document.getElementById("user-table-body");
+            for (row of rows) {
+                console.log(row);
+                const rowEl = document.createElement("tr", id="a");
+                rowEl.id = row["id"];
+                for (col of Object.entries(row)) {
+                    const k = col[0];
+                    const v = col[1];
+                    const colEl = document.createElement("td");
+                    colEl.innerText = v;
+                    colEl.id = `${rowEl.id}.${k}`;
+                    rowEl.appendChild(colEl);
+                }
+                userTable.appendChild(rowEl);
+            }
+        })
     </script>
 </html>
