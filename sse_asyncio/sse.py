@@ -1,32 +1,66 @@
-import asyncio
+from asyncio import Queue, create_task
 from dataclasses import dataclass
 import json
+import logging
 import typing as t
 
+from sse_asyncio.events import EVENT_QUEUES, UserUpdate
+
 if t.TYPE_CHECKING:
-    from starlette.requests import Request
+    from asyncio import Task
+    from starlette.requests import Request  
+
+
+class EventQueue(Queue):
+    def __init__(self, maxsize: int = 0, *, id, **kwargs) -> None:
+        super().__init__(maxsize=maxsize, **kwargs)
+        self.id = id
 
 
 async def sse_generator(request: "Request"):
-    i = 0
     closed_by_client = False
+    client_id = request.client.port
+    logger_ = logging.getLogger(__name__ + f" [{client_id}]")
+
+    own_queue = EventQueue(id=client_id)
+    EVENT_QUEUES[UserUpdate.__name__].append(own_queue)
+
+    async def _subscribe(request: "Request", subscriber: "EventQueue", publisher: "EventQueue"):
+        while True:
+            if await request.is_disconnected():
+                break
+
+            event = await publisher.get()
+            await subscriber.put(event)
+            logger_.info("Queue %s published event %s to queue %s", publisher.id, event, subscriber.id)
+
+
+    subscriptions: list["Task"] = []
+    for queue in EVENT_QUEUES[UserUpdate.__name__]:
+        if queue == own_queue:
+            continue
+        subscription = create_task(_subscribe(request=request, subscriber=own_queue, publisher=queue))
+        subscriptions.append(subscription)
+        reverse_subscription = create_task(_subscribe(request=request, subscriber=queue, publisher=own_queue))
+        subscriptions.append(reverse_subscription)
+
+
     while True:
         if await request.is_disconnected():
             closed_by_client = False
+            for subscription in subscriptions:
+                subscription.cancel()
+                await subscription
             break
 
-        data: dict = {
-            "id": "456.name",
-            "value": "User 999",
-        }
-        event = Event(event="some-event", data=data, id=f"some-event-{i}")
-        print(f"Sending event: {event!r}")
+        event_: UserUpdate = await own_queue.get()
+        event = Event(event=event_.event, id=event_.id, data=event_.data)
+
+        logger_.info(f"Sending event: {event!r}")
         yield event.to_json()
-        i += 1
-        await asyncio.sleep(1)
 
     if closed_by_client:
-        print("Connection closed by client")
+        logger_.info("Connection closed by client")
 
 
 @dataclass

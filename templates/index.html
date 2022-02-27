@@ -3,16 +3,26 @@
     <title>SSE Demo</title>
     <body>
         SSE Demo
+
+        <p>Update user name by id:</p>
+        <form id="form-user-update">
+            <label for="id">Id: </label>
+            <input type="text" name="id" id="form-user-update--id" required>
+            <label for="name">New name: </label>
+            <input type="text" name="name" id="form-user-update--name" required>
+            <button type="submit">Update user name</button>
+        </form>
+
         <table>
             <thead>
                 <td>Column 1</td>
                 <td>Column 2</td>
             </thead>
             <tbody id="user-table-body">
-                <tr>
+                <!-- <tr>
                     <td>Value 1</td>
                     <td>Value 2</td>
-                </tr>
+                </tr> -->
             </tbody>
         </table>
     </body>
@@ -20,7 +30,7 @@
         var eventSource = new EventSource(
             "/sse/",
             {
-                withCredentials: true,     
+                withCredentials: true,
             },
         );
         eventSource.onopen = function () {
@@ -43,14 +53,9 @@
         };
 
         fetch("/users/chart/").then(r => r.json()).then(r => {
-            console.log(r);
-            const rows = [
-                {"id": 123, "name": "User 1"},
-                {"id": 456, "name": "User 2"},
-            ];
+            const rows = r.rows;
             var userTable = document.getElementById("user-table-body");
             for (row of rows) {
-                console.log(row);
                 const rowEl = document.createElement("tr", id="a");
                 rowEl.id = row["id"];
                 for (col of Object.entries(row)) {
@@ -64,5 +69,21 @@
                 userTable.appendChild(rowEl);
             }
         })
+
+        function userUpdateFormHandler(event) {
+            event.preventDefault();
+            const userId = document.getElementById("form-user-update--id").value;
+            const newUserName = document.getElementById("form-user-update--name").value;
+            fetch(
+                `/users/${userId}/`, 
+                {
+                    "method": "PATCH",
+                    "headers": {"Content-Type": "application/json"},
+                    "body": JSON.stringify({"name": newUserName}),
+                },
+            );
+        }
+        const userUpdateForm = document.getElementById('form-user-update');
+        userUpdateForm.addEventListener('submit', userUpdateFormHandler);
     </script>
 </html>
