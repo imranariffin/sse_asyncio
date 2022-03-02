@@ -11,3 +11,10 @@ services:
             - 5432:5432
         volumes:
             - /var/run/postgresql:/var/run/postgresql
+
+    redis:
+        image: "redis"
+        expose:
+            - "6379"
+        ports:
+            - "127.0.0.1:6379:6379"

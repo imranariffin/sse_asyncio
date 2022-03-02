@@ -12,7 +12,7 @@ from starlette.routing import Route
 
 from tortoise import Tortoise
 
-from sse_asyncio.events import EVENT_QUEUES, UserUpdate
+from sse_asyncio.events import UserUpdate, publish
 from sse_asyncio.sse import sse_generator
 from sse_asyncio.models import User
 
@@ -22,7 +22,7 @@ if t.TYPE_CHECKING:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-templates = Jinja2Templates(directory='templates', auto_reload=True)
+templates = Jinja2Templates(directory="templates", auto_reload=True)
 
 
 async def homepage(request: "Request"):
@@ -36,10 +36,13 @@ async def sse(request: "Request"):
 
 
 if environ["DEBUG"]:
+
     async def load_test_data(request: "Request"):
         assert request.method == "POST"
         user_names = {f"User {i}" for i in range(1, 200)}
-        existing_user_names = set(await User.filter(name__in=user_names).values_list("name", flat=True))
+        existing_user_names = set(
+            await User.filter(name__in=user_names).values_list("name", flat=True)
+        )
         new_user_names = user_names - existing_user_names
         r = await User.bulk_create(objects=(User(name=name) for name in new_user_names))
         return JSONResponse(content={"new_users": len(r)}, status_code=201)
@@ -50,14 +53,12 @@ async def update_user(request: "Request"):
     body = await request.json()
     new_name = body["name"]
     await User.select_for_update().filter(id=user_id).update(name=new_name)
-    queues = EVENT_QUEUES[UserUpdate.__name__]
     event = UserUpdate(
         event="some-event",
         id=f"some-event-{user_id}",
         data={"id": f"{user_id}.name", "value": new_name},
     )
-    for q in queues:
-        create_task(q.put(event))
+    await publish(event)
     return JSONResponse(content={"id": user_id, "name": new_name}, status_code=200)
 
 
@@ -101,20 +102,18 @@ async def on_startup_task():
 
 
 routes = [
-    Route('/', homepage),
+    Route("/", homepage),
     Route("/sse", sse),
     Route("/users/chart", users_chart),
-    Route("/users/{user_id:int}", update_user, methods=["PATCH"])
+    Route("/users/{user_id:int}", update_user, methods=["PATCH"]),
 ]
 
 if environ["DEBUG"]:
-    routes.append(
-        Route("/load-test-data", load_test_data, methods=["POST"])
-    )
+    routes.append(Route("/load-test-data", load_test_data, methods=["POST"]))
 
 
 app = Starlette(
-    debug=True, 
+    debug=True,
     routes=routes,
     on_startup=[on_startup_task],
 )

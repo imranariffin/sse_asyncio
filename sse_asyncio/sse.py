@@ -1,14 +1,22 @@
+import asyncio
 from asyncio import Queue, create_task
 from dataclasses import dataclass
 import json
 import logging
 import typing as t
 
-from sse_asyncio.events import EVENT_QUEUES, UserUpdate
+import aioredis
+
+from sse_asyncio.events import EVENT_CLASSES, UserUpdate
 
 if t.TYPE_CHECKING:
     from asyncio import Task
-    from starlette.requests import Request  
+    from starlette.requests import Request
+
+
+redis = aioredis.Redis.from_url(
+    "redis://localhost", max_connections=10, decode_responses=True
+)
 
 
 class EventQueue(Queue):
@@ -23,37 +31,36 @@ async def sse_generator(request: "Request"):
     logger_ = logging.getLogger(__name__ + f" [{client_id}]")
 
     own_queue = EventQueue(id=client_id)
-    EVENT_QUEUES[UserUpdate.__name__].append(own_queue)
 
-    async def _subscribe(request: "Request", subscriber: "EventQueue", publisher: "EventQueue"):
-        while True:
-            if await request.is_disconnected():
-                break
+    async def _subscribe(request: "Request", subscriber: "EventQueue"):
+        async with redis.pubsub() as pubsub:
+            for event_class in EVENT_CLASSES:
+                await pubsub.subscribe(event_class.__name__)
 
-            event = await publisher.get()
-            await subscriber.put(event)
-            logger_.info("Queue %s published event %s to queue %s", publisher.id, event, subscriber.id)
+            while True:
+                if await request.is_disconnected():
+                    break
 
+                redis_message: dict = await pubsub.get_message(
+                    ignore_subscribe_messages=True
+                )
+                if redis_message is None:
+                    await asyncio.sleep(0.01)
+                    continue
+                event = UserUpdate.from_json(redis_message["data"])
+                await subscriber.put(event)
 
-    subscriptions: list["Task"] = []
-    for queue in EVENT_QUEUES[UserUpdate.__name__]:
-        if queue == own_queue:
-            continue
-        subscription = create_task(_subscribe(request=request, subscriber=own_queue, publisher=queue))
-        subscriptions.append(subscription)
-        reverse_subscription = create_task(_subscribe(request=request, subscriber=queue, publisher=own_queue))
-        subscriptions.append(reverse_subscription)
-
+    create_task(_subscribe(request=request, subscriber=own_queue))
 
     while True:
         if await request.is_disconnected():
             closed_by_client = False
-            for subscription in subscriptions:
-                subscription.cancel()
-                await subscription
             break
 
         event_: UserUpdate = await own_queue.get()
+        if not event_:
+            logger_.warning("Got None as event, skipping")
+            continue
         event = Event(event=event_.event, id=event_.id, data=event_.data)
 
         logger_.info(f"Sending event: {event!r}")
