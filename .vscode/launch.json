@@ -12,7 +12,11 @@
             "args": [
                 "sse_asyncio.main:app",
                 "--reload"
-            ]
+            ],
+            "env": {
+                "DATABASE_URL": "postgres://sse_asyncio:mysecretpassword@127.0.0.1:5432/sse_asyncio",
+                "DEBUG": "1"
+            }
         }
     ]
 }

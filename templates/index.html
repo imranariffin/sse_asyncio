@@ -3,26 +3,87 @@
     <title>SSE Demo</title>
     <body>
         SSE Demo
+
+        <p>Update user name by id:</p>
+        <form id="form-user-update">
+            <label for="id">Id: </label>
+            <input type="text" name="id" id="form-user-update--id" required>
+            <label for="name">New name: </label>
+            <input type="text" name="name" id="form-user-update--name" required>
+            <button type="submit">Update user name</button>
+        </form>
+
+        <table>
+            <thead>
+                <td>Column 1</td>
+                <td>Column 2</td>
+            </thead>
+            <tbody id="user-table-body">
+                <!-- <tr>
+                    <td>Value 1</td>
+                    <td>Value 2</td>
+                </tr> -->
+            </tbody>
+        </table>
     </body>
     <script>
         var eventSource = new EventSource(
-            "http://localhost:8000/sse/",
+            "/sse/",
             {
                 withCredentials: true,
-                
             },
         );
         eventSource.onopen = function () {
             console.log("SSE streaming connection is open");
         };
-        eventSource.onmessage = function (event) {
-            console.log(event);
-        };
         eventSource.addEventListener("some-event", function(event) {
-            console.log(event);
+            const data = JSON.parse(event.data);
+            console.log(data);
+            const cellEl = document.getElementById(data.id);
+            if (cellEl) {
+                cellEl.innerText = data.value;
+                cellEl.style = "background-color: red;"
+                setTimeout(() => {
+                    cellEl.style = "";
+                }, 500)
+            }
         });
         eventSource.onerror = function () {
             console.log("Some error happened");
         };
+
+        fetch("/users/chart/").then(r => r.json()).then(r => {
+            const rows = r.rows;
+            var userTable = document.getElementById("user-table-body");
+            for (row of rows) {
+                const rowEl = document.createElement("tr", id="a");
+                rowEl.id = row["id"];
+                for (col of Object.entries(row)) {
+                    const k = col[0];
+                    const v = col[1];
+                    const colEl = document.createElement("td");
+                    colEl.innerText = v;
+                    colEl.id = `${rowEl.id}.${k}`;
+                    rowEl.appendChild(colEl);
+                }
+                userTable.appendChild(rowEl);
+            }
+        })
+
+        function userUpdateFormHandler(event) {
+            event.preventDefault();
+            const userId = document.getElementById("form-user-update--id").value;
+            const newUserName = document.getElementById("form-user-update--name").value;
+            fetch(
+                `/users/${userId}/`, 
+                {
+                    "method": "PATCH",
+                    "headers": {"Content-Type": "application/json"},
+                    "body": JSON.stringify({"name": newUserName}),
+                },
+            );
+        }
+        const userUpdateForm = document.getElementById('form-user-update');
+        userUpdateForm.addEventListener('submit', userUpdateFormHandler);
     </script>
 </html>
