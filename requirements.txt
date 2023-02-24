@@ -1,4 +1,6 @@
 Jinja2==3.0.3
+aioredis==2.0.1
+asyncpg==0.27.0
 black==22.1.0
 sse-starlette==0.10.3
 sse-starlette==0.10.3
